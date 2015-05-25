@@ -170,8 +170,32 @@ local cmds = {
         ["maxArgs"] = 0,
         ["errMsg"] = "Usage: %s",
         ["handler"] = cmdLsWaypoint
+    },
+    ["help"] = {
+        ["minArgs"] = 0,
+        ["maxArgs"] = 1,
+        ["errMsg"] = "Usage: %s [command]",
+        ["handler"] = cmdHelp
     }
 }
+
+function cmdHelp(args)
+    if(#args == 0) then
+        print("Commands:")
+        table.foreach(cmds, function(cmd)
+            print(cmd)
+        end)
+    else
+        local cmd = cmds[args[1]:lower()]
+        if(cmd == nil) then
+            print(string.format("Unknown command '%s'", args[1]))
+            return true
+        end
+        print(string.format("%s:", args[1]))
+        print(string.format(cmd.errMsg, args[1]))
+    end
+    return true
+end
 
 function split(str, sep)
         local sep, fields = sep or ":", {}
