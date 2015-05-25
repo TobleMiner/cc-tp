@@ -1,6 +1,6 @@
 local config = {
     ["player"] = "Toble_Miner",
-    ["interface"] = 248,
+    ["server"] = 248,
     ["modem"] = "back",
     ["channel"] = "teleport",
     ["wpfile"] = "waypoints"
@@ -20,12 +20,12 @@ function print(str)
     repeat
         local sub = str:sub(pos, pos + width - 1)
         posY = posY + 1
-        term.setCursorPos(1, posY)
-        term.write(sub)
         if(posY == height) then
             term.scroll(1)
             posY = posY - 1
         end
+        term.setCursorPos(1, posY)
+        term.write(sub)
         pos = pos + width
     until #sub < width
     term.setCursorPos(posX + #prefix, posY)
@@ -62,7 +62,7 @@ function tp(player, pos)
         ["player"] = player,
         ["pos"] = pos
     }
-    rednet.send(config.interface, textutils.serialize(obj), config.channel)
+    rednet.send(config.server, textutils.serialize(obj), config.channel)
 end
 
 function cmdTp(args)
@@ -268,7 +268,7 @@ while true do
                         print(string.format(cmd.errMsg, cmdStr))
                     end
                 else
-                    print(string.format("Invalid command '%s'", args[1]))
+                    print(string.format("Unknown command '%s'", args[1]))
                     table.remove(history)
                 end
             end
@@ -306,6 +306,29 @@ while true do
                 historyPos = historyPos - 1
                 buffer = history[#history - historyPos]
                 posX = #buffer + 1
+            end
+        elseif(key == keys.tab) then
+            local args = parseArgs(buffer)
+            if(#args == 1) then
+                local match = {}
+                local matchstr = ""
+                for cmd in pairs(cmds) do
+                    if(cmd:match(string.format("^%s", args[1]:lower()))) then
+                        table.insert(match, cmd)
+                        matchstr = string.format("%s%s ", matchstr, cmd)
+                    end
+                end
+                if(#match == 1) then
+                    buffer = match[1]
+                    posX = #buffer + 1
+                else
+                    print(matchstr)
+                    posY = posY + 1
+                    if(posY == height) then
+                        term.scroll(1)
+                        posY = posY - 1
+                    end
+                end
             end
         end
         render()
