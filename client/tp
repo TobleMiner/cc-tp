@@ -6,6 +6,32 @@ local config = {
     ["wpfile"] = "waypoints"
 }
 
+local history = { "" }
+local buffer = ""
+local posX = 1
+local posY = 1
+local width, height = term.getSize()
+local prefix = ">_ "
+local historyPos = 0
+
+function print(str)
+    local lines = { }
+    local pos = 1
+    repeat
+        local sub = str:sub(pos, pos + width - 1)
+        posY = posY + 1
+        term.setCursorPos(1, posY)
+        term.write(sub)
+        if(posY == height) then
+            term.scroll(1)
+            posY = posY - 1
+        end
+        pos = pos + width
+    until #sub < width
+    term.setCursorPos(posX + #prefix, posY)
+end
+
+
 Location = { }
 Location.__index = Location
 
@@ -188,31 +214,100 @@ function store(file)
     flhndl.close()
 end
 
+function expandLine(str)
+    if(#str < width) then
+        for i = 1, width - #str do
+            str = str .. " "
+        end
+    end
+    return str
+end
+
+function render()
+    term.setCursorPos(1, posY)
+    term.write(expandLine(prefix..buffer))
+    term.setCursorPos(posX + #prefix, posY)
+end
+
 rednet.open(config.modem)
 load(config.wpfile)
 computeAliases()
 
+term.clear()
+term.setCursorBlink(true)
+render()
 while true do
-    local input = io.input():read()
-    local args = parseArgs(input)
-    if(#args > 0) then
-        local cmdStr = args[1]
-        local cmd = cmds[cmdStr:lower()]
-        if(cmd ~= nil) then
-            table.remove(args, 1)
-            if(#args >= cmd.minArgs and #args <= cmd.maxArgs) then
-                err, errmsg = pcall(cmd.handler, args)
-                if(not err) then
-                    print(string.format("Error in %s: %s",
-                        tostring(cmd.handler), errmsg))
-                elseif(not errmsg) then
-                    print(string.format(cmd.errMsg, cmdStr))
+    local event, key = os.pullEvent()
+    if(event == "char") then
+        local part1 = buffer:sub(1, posX - 1)
+        local part2 = buffer:sub(posX, #buffer)
+        buffer = part1 .. key .. part2
+        history[#history] = buffer
+        posX = posX + 1
+        render()
+    elseif(event == "key") then
+        if(key == keys.enter or key == keys.numPadEnter) then
+            local args = parseArgs(buffer)
+            if(#args > 0) then
+                local cmdStr = args[1]
+                local cmd = cmds[cmdStr:lower()]
+                if(cmd ~= nil) then
+                    if(history[#history - 1] ~= buffer) then
+                        history[#history] = buffer
+                    end
+                    table.remove(args, 1)
+                    if(#args >= cmd.minArgs and #args <= cmd.maxArgs) then
+                        err, errmsg = pcall(cmd.handler, args)
+                        if(not err) then
+                            print(string.format("Error in %s: %s",
+                                tostring(cmd.handler), errmsg))
+                        elseif(not errmsg) then
+                            print(string.format(cmd.errMsg, cmdStr))
+                        end
+                    else
+                        print(string.format(cmd.errMsg, cmdStr))
+                    end
+                else
+                    print(string.format("Invalid command '%s'", args[1]))
+                    table.remove(history)
                 end
-            else
-                print(string.format(cmd.errMsg, cmdStr))
             end
-        else
-            print(string.format("Invalid command '%s'", args[1]))
+            posY = posY + 1
+            if(posY == height) then
+                term.scroll(1)
+                posY = posY - 1
+            end
+            posX = 1
+            buffer = ""
+            table.insert(history, "")
+        elseif(key == keys.left) then
+            if(posX > 1) then
+                posX = posX - 1
+            end
+        elseif(key == keys.right) then
+            if(posX <= #buffer) then
+                posX = posX + 1
+            end
+        elseif(key == keys.backspace) then
+            if(posX > 1) then
+                local part1 = buffer:sub(1, posX - 2)
+                local part2 = buffer:sub(posX, #buffer)
+                buffer = part1 .. part2
+                posX = posX - 1
+            end
+        elseif(key == keys.up) then
+            if(historyPos < #history - 1) then
+                historyPos = historyPos + 1
+                buffer = history[#history - historyPos]
+                posX = #buffer + 1
+            end
+        elseif(key == keys.down) then
+            if(historyPos > 0) then
+                historyPos = historyPos - 1
+                buffer = history[#history - historyPos]
+                posX = #buffer + 1
+            end
         end
+        render()
     end
 end
